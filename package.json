@@ -2,21 +2,55 @@
   "name": "pinia-api-client",
   "version": "0.1.0",
   "description": "A helper library integrating Pinia state management with a configurable Axios API client.",
-  "main": "index.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/maxellmilay/pinia-api-client.git"
   },
   "keywords": [
-    "pinia"
+    "pinia",
+    "axios",
+    "api",
+    "state management",
+    "rest",
+    "typescript",
+    "vue",
+    "nuxt"
   ],
   "author": "Maxell Milay",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/maxellmilay/pinia-api-client/issues"
   },
-  "homepage": "https://github.com/maxellmilay/pinia-api-client#readme"
+  "homepage": "https://github.com/maxellmilay/pinia-api-client#readme",
+  "peerDependencies": {
+    "axios": "^1.8.4",
+    "pinia": "^2.2.1"
+  },
+  "dependencies": {
+    "pinia": "^2.2.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.14.0",
+    "axios": "^1.8.4",
+    "axios-mock-adapter": "^2.1.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.1",
+    "typescript": "^5.8.3"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }
