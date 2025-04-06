@@ -1,0 +1,22 @@
+{
+  "name": "pinia-api-client",
+  "version": "0.1.0",
+  "description": "A helper library integrating Pinia state management with a configurable Axios API client.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maxellmilay/pinia-api-client.git"
+  },
+  "keywords": [
+    "pinia"
+  ],
+  "author": "Maxell Milay",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/maxellmilay/pinia-api-client/issues"
+  },
+  "homepage": "https://github.com/maxellmilay/pinia-api-client#readme"
+}
