@@ -115,7 +115,7 @@ export function createGenericStore<
           const data = await apiClient.get<T>(`${endpoint}/${id}`)
           this.item = data
         } catch (err: any) {
-          this.error = err instanceof Error ? err : new Error(String(err))
+          this.error = err
         } finally {
           this.loading = false
         }
@@ -129,7 +129,7 @@ export function createGenericStore<
           await this.fetchAll() // Refetch list after creation
           return createdData
         } catch (err: any) {
-          this.error = err instanceof Error ? err : new Error(String(err))
+          this.error = err
           return undefined; // Explicitly return undefined on error
         } finally {
           this.loading = false
@@ -144,7 +144,7 @@ export function createGenericStore<
           await this.fetchAll() // Refetch list after update
           return updatedData
         } catch (err: any) {
-          this.error = err instanceof Error ? err : new Error(String(err))
+          this.error = err
           return undefined; // Explicitly return undefined on error
         } finally {
           this.loading = false
@@ -157,7 +157,7 @@ export function createGenericStore<
           await apiClient.delete(`${endpoint}/${id}`)
           await this.fetchAll() // Refetch list after deletion
         } catch (err: any) {
-          this.error = err instanceof Error ? err : new Error(String(err))
+          this.error = err
         } finally {
           this.loading = false
         }

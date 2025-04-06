@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig } from 'axios';
+import axios, { AxiosRequestConfig, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import { initApiClient, apiClient, axiosInstance as apiInstanceInternal } from './api';
 
 // Mock the entire axios module
@@ -14,6 +14,17 @@ const mockAxiosInstance = {
   put: jest.fn(),
   delete: jest.fn(),
   request: jest.fn(),
+  // Add mock interceptors
+  interceptors: {
+    request: {
+      use: jest.fn(),
+      eject: jest.fn(), // Add eject if needed for other tests
+    },
+    response: {
+      use: jest.fn(),
+      eject: jest.fn(), // Add eject if needed for other tests
+    },
+  },
   // Add other methods used by your apiClient if any
 };
 
@@ -72,6 +83,95 @@ describe('initApiClient', () => {
         withCredentials: config.withCredentials
       }));
   });
+
+  // --- Interceptor Tests --- 
+
+  it('should attach a single request interceptor', () => {
+    const mockRequestInterceptor = jest.fn((config: InternalAxiosRequestConfig) => config);
+    const mockRequestErrorInterceptor = jest.fn((error: any) => Promise.reject(error));
+    
+    initApiClient({
+      baseURL: 'http://test.com',
+      requestInterceptors: mockRequestInterceptor, // Pass single function
+      requestInterceptorErrors: mockRequestErrorInterceptor,
+    });
+
+    expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledTimes(1);
+    expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledWith(
+      mockRequestInterceptor,
+      mockRequestErrorInterceptor
+    );
+  });
+
+  it('should attach multiple request interceptors from an array', () => {
+    const mockReqInterceptor1 = jest.fn((config: InternalAxiosRequestConfig) => config);
+    const mockReqInterceptor2 = jest.fn((config: InternalAxiosRequestConfig) => config);
+    const mockReqErrorInterceptor1 = jest.fn((error: any) => Promise.reject(error));
+    const mockReqErrorInterceptor2 = jest.fn((error: any) => Promise.reject(error)); // Will be ignored
+
+    initApiClient({
+      baseURL: 'http://test.com',
+      requestInterceptors: [mockReqInterceptor1, mockReqInterceptor2],
+      requestInterceptorErrors: [mockReqErrorInterceptor1, mockReqErrorInterceptor2],
+    });
+
+    expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledTimes(2);
+    expect(mockAxiosInstance.interceptors.request.use).toHaveBeenNthCalledWith(1, 
+      mockReqInterceptor1,
+      mockReqErrorInterceptor1 // Uses the first error handler
+    );
+    expect(mockAxiosInstance.interceptors.request.use).toHaveBeenNthCalledWith(2, 
+      mockReqInterceptor2,
+      mockReqErrorInterceptor1 // Uses the first error handler again
+    );
+  });
+
+  it('should attach a single response interceptor', () => {
+    const mockResponseInterceptor = jest.fn((response: AxiosResponse) => response);
+    const mockResponseErrorInterceptor = jest.fn((error: AxiosError) => Promise.reject(error));
+    
+    initApiClient({
+      baseURL: 'http://test.com',
+      responseInterceptors: mockResponseInterceptor, // Pass single function
+      responseInterceptorErrors: mockResponseErrorInterceptor,
+    });
+
+    expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledTimes(1);
+    expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledWith(
+      mockResponseInterceptor,
+      mockResponseErrorInterceptor
+    );
+  });
+
+  it('should attach multiple response interceptors from an array', () => {
+    const mockResInterceptor1 = jest.fn((response: AxiosResponse) => response);
+    const mockResInterceptor2 = jest.fn((response: AxiosResponse) => response);
+    const mockResErrorInterceptor1 = jest.fn((error: AxiosError) => Promise.reject(error));
+    const mockResErrorInterceptor2 = jest.fn((error: AxiosError) => Promise.reject(error)); // Will be ignored
+
+    initApiClient({
+      baseURL: 'http://test.com',
+      responseInterceptors: [mockResInterceptor1, mockResInterceptor2],
+      responseInterceptorErrors: [mockResErrorInterceptor1, mockResErrorInterceptor2],
+    });
+
+    expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledTimes(2);
+    expect(mockAxiosInstance.interceptors.response.use).toHaveBeenNthCalledWith(1, 
+      mockResInterceptor1,
+      mockResErrorInterceptor1 // Uses the first error handler
+    );
+    expect(mockAxiosInstance.interceptors.response.use).toHaveBeenNthCalledWith(2, 
+      mockResInterceptor2,
+      mockResErrorInterceptor1 // Uses the first error handler again
+    );
+  });
+
+    it('should not call use if no interceptors are provided', () => {
+        initApiClient({ baseURL: 'http://test.com' });
+        expect(mockAxiosInstance.interceptors.request.use).not.toHaveBeenCalled();
+        expect(mockAxiosInstance.interceptors.response.use).not.toHaveBeenCalled();
+    });
+
 });
 
 describe('apiClient (after initialization)', () => {
@@ -164,6 +264,25 @@ describe('apiClient (after initialization)', () => {
     expect(result).toEqual(mockResponse.data);
   });
 
+  // Test postFile error handling
+  it('postFile should handle errors', async () => {
+    // Temporarily suppress console.error
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const formData = new FormData();
+    formData.append('file', new Blob(['content']), 'file.txt');
+    const mockError = new Error('Upload Failed');
+    // Make the direct post call reject
+    mockAxiosInstance.post.mockRejectedValue(mockError);
+
+    await expect(apiClient.postFile(endpoint, formData)).rejects.toThrow(`Request failed: ${mockError.message}`);
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith(endpoint, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+
+    consoleErrorSpy.mockRestore();
+  });
+
   // Test Error Handling - API Error (e.g., 4xx, 5xx)
   it('should handle API errors (error.response)', async () => {
     // Temporarily suppress console.error for this expected error log
@@ -186,16 +305,17 @@ describe('apiClient (after initialization)', () => {
   });
 
   // Test Error Handling - No Response
-   it('should handle network errors (error.request)', async () => {
+   it('should handle network errors (error.request) by throwing specific message', async () => {
     // Temporarily suppress console.error for this expected error log
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     const mockNetworkError = {
-      request: { /* some request object */ },
-      message: 'Network Error'
+      request: { /* some request object */ }, // Presence of request is key
+      message: 'Network Error' // Original message
     };
     mockAxiosInstance.request.mockRejectedValue(mockNetworkError);
 
+    // Expect the specific error thrown by handleError
     await expect(apiClient.get(endpoint)).rejects.toThrow('No response from server');
      expect(mockAxiosInstance.request).toHaveBeenCalledWith({
         method: 'get',
@@ -208,13 +328,14 @@ describe('apiClient (after initialization)', () => {
   });
 
   // Test Error Handling - Setup Error
-  it('should handle request setup errors (error.message)', async () => {
+  it('should handle request setup errors (error.message) by throwing specific message', async () => {
     // Temporarily suppress console.error for this expected error log
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    const mockSetupError = new Error('Failed to setup request');
+    const mockSetupError = new Error('Failed to setup request'); // Error without .response or .request
     mockAxiosInstance.request.mockRejectedValue(mockSetupError);
 
+    // Expect the specific error thrown by handleError
     await expect(apiClient.get(endpoint)).rejects.toThrow(`Request failed: ${mockSetupError.message}`);
      expect(mockAxiosInstance.request).toHaveBeenCalledWith({
         method: 'get',

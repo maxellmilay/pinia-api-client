@@ -1,5 +1,5 @@
 // utils/apiClient.js
-import axios, { AxiosInstance, AxiosRequestConfig, Method } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, Method, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
 // Export for testing purposes - make it potentially undefined
 // Export the instance itself for mocking
@@ -9,11 +9,30 @@ export let axiosInstance: AxiosInstance | undefined;
 // Extends AxiosRequestConfig but makes baseURL mandatory
 interface ApiClientConfig extends Omit<AxiosRequestConfig, 'baseURL'> {
   baseURL: string;
+  // Optional interceptors (can be single function or array)
+  requestInterceptors?: ((config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>) | Array<(config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>>;
+  requestInterceptorErrors?: ((error: any) => any) | Array<(error: any) => any>;
+  responseInterceptors?: ((response: AxiosResponse) => AxiosResponse | Promise<AxiosResponse>) | Array<(response: AxiosResponse) => AxiosResponse | Promise<AxiosResponse>>;
+  responseInterceptorErrors?: ((error: AxiosError) => any) | Array<(error: AxiosError) => any>;
+}
+
+// Helper function to ensure we have an array
+function ensureArray<T>(itemOrArray: T | T[] | undefined): T[] {
+  if (!itemOrArray) return [];
+  return Array.isArray(itemOrArray) ? itemOrArray : [itemOrArray];
 }
 
 // Function to initialize the API client
 export const initApiClient = (config: ApiClientConfig): void => {
-  const { baseURL, ...restConfig } = config;
+  const {
+    baseURL,
+    requestInterceptors,
+    requestInterceptorErrors,
+    responseInterceptors,
+    responseInterceptorErrors,
+    ...restConfig
+  } = config;
+
   axiosInstance = axios.create({
     baseURL: baseURL,
     withCredentials: true,
@@ -24,7 +43,30 @@ export const initApiClient = (config: ApiClientConfig): void => {
     },
     // No need to spread restConfig again here
   });
-  // You might want to add interceptors here (e.g., for auth tokens)
+
+  // Add request interceptors if provided
+  if (axiosInstance) {
+    const reqInterceptors = ensureArray(requestInterceptors);
+    const reqErrorInterceptors = ensureArray(requestInterceptorErrors);
+    // Note: Axios applies interceptors in the order they are added.
+    // It only supports ONE error handler per `use` call.
+    // We'll apply each success interceptor. For errors, we might need a strategy
+    // if multiple error handlers are needed (e.g., chain them or pick one).
+    // For simplicity, we'll just use the first error handler if multiple are provided.
+    reqInterceptors.forEach(interceptor => {
+        axiosInstance!.interceptors.request.use(interceptor, reqErrorInterceptors[0]);
+    });
+  }
+
+  // Add response interceptors if provided
+  if (axiosInstance) {
+    const resInterceptors = ensureArray(responseInterceptors);
+    const resErrorInterceptors = ensureArray(responseInterceptorErrors);
+    // Similar logic for response interceptors
+    resInterceptors.forEach(interceptor => {
+        axiosInstance!.interceptors.response.use(interceptor, resErrorInterceptors[0]);
+    });
+  }
 };
 
 // Optional: Global error handler (keep as is for now, or add specific error types)

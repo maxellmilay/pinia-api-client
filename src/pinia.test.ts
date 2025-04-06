@@ -182,6 +182,78 @@ describe('createGenericStore', () => {
       expect(store.items).toEqual([]);
   });
 
+  it('should handle fetchOne error', async () => {
+      const useTestStore = createGenericStore<TestItem>(storeId, endpoint);
+      const store = useTestStore();
+      const itemId = 1;
+      const errorMessage = 'Not Found';
+
+      mock.onGet(`${endpoint}/${itemId}`).reply(404, { message: errorMessage });
+
+      await store.fetchOne(itemId);
+
+      expect(store.loading).toBe(false);
+      expect(store.item).toBeNull();
+      expect(store.error).toBeInstanceOf(Object); // Axios errors with response data are thrown as data
+      // Check if the error object contains the expected message property
+      expect(store.error).toHaveProperty('message', errorMessage);
+  });
+
+  it('should handle create error', async () => {
+      const useTestStore = createGenericStore<TestItem>(storeId, endpoint);
+      const store = useTestStore();
+      const newItem = { name: 'New Item' };
+      const errorMessage = 'Creation Failed';
+
+      mock.onPost(endpoint, newItem).reply(500, { message: errorMessage });
+
+      const result = await store.create(newItem);
+
+      expect(result).toBeUndefined();
+      expect(store.loading).toBe(false);
+      expect(store.error).toBeInstanceOf(Object);
+      // Check if the error object contains the expected message property
+      expect(store.error).toHaveProperty('message', errorMessage);
+      // Ensure fetchAll wasn't called implicitly on error
+      expect(mock.history.get.length).toBe(0);
+  });
+
+  it('should handle update error', async () => {
+      const useTestStore = createGenericStore<TestItem>(storeId, endpoint);
+      const store = useTestStore();
+      const itemId = 1;
+      const updatePayload = { name: 'Updated Item' };
+      const errorMessage = 'Update Conflict';
+
+      mock.onPut(`${endpoint}/${itemId}`, updatePayload).reply(409, { message: errorMessage });
+
+      const result = await store.update(itemId, updatePayload);
+
+      expect(result).toBeUndefined();
+      expect(store.loading).toBe(false);
+      expect(store.error).toBeInstanceOf(Object);
+      // Check if the error object contains the expected message property
+      expect(store.error).toHaveProperty('message', errorMessage);
+      expect(mock.history.get.length).toBe(0); // Ensure fetchAll wasn't called
+  });
+
+  it('should handle remove error', async () => {
+      const useTestStore = createGenericStore<TestItem>(storeId, endpoint);
+      const store = useTestStore();
+      const itemId = 1;
+      const errorMessage = 'Deletion Forbidden';
+
+      mock.onDelete(`${endpoint}/${itemId}`).reply(403, { message: errorMessage });
+
+      await store.remove(itemId);
+
+      expect(store.loading).toBe(false);
+      expect(store.error).toBeInstanceOf(Object);
+      // Check if the error object contains the expected message property
+      expect(store.error).toHaveProperty('message', errorMessage);
+      expect(mock.history.get.length).toBe(0); // Ensure fetchAll wasn't called
+  });
+
   // Test extended store functionality
   it('should allow extending state, getters, and actions', async () => {
     const extendStore = () => ({
