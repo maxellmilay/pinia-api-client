@@ -1,6 +1,6 @@
 {
   "name": "pinia-api-client",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A helper library integrating Pinia state management with a configurable Axios API client.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
