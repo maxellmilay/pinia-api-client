@@ -1,6 +1,6 @@
 {
   "name": "pinia-api-client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A helper library integrating Pinia state management with a configurable Axios API client.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -34,9 +34,6 @@
   "homepage": "https://github.com/maxellmilay/pinia-api-client#readme",
   "peerDependencies": {
     "axios": "^1.8.4",
-    "pinia": "^2.2.1"
-  },
-  "dependencies": {
     "pinia": "^2.2.1"
   },
   "devDependencies": {
