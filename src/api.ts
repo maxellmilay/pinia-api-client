@@ -30,13 +30,21 @@ export const initApiClient = (config: ApiClientConfig): void => {
 // Optional: Global error handler (keep as is for now, or add specific error types)
 const handleError = (error: any): never => { // Using 'any' for now, consider defining a specific error type
   if (error.response) {
-    console.error('API Error:', error.response.data);
+    // The request was made and the server responded with a status code
+    // that falls out of the range of 2xx
+    console.error('API Error Status:', error.response.status);
+    console.error('API Error Data:', error.response.data);
+    // console.error('API Error Headers:', error.response.headers);
     throw error.response.data; // Re-throw the specific API error data
   } else if (error.request) {
-    console.error('No response from server:', error.request);
+    // The request was made but no response was received
+    // `error.request` is an instance of XMLHttpRequest in the browser and an instance of
+    // http.ClientRequest in node.js
+    console.error('No response received:', error.request);
     throw new Error('No response from server');
   } else {
-    console.error('Request error:', error.message);
+    // Something happened in setting up the request that triggered an Error
+    console.error('Request setup error:', error.message);
     throw new Error(`Request failed: ${error.message}`);
   }
 };
