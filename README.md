@@ -25,10 +25,12 @@ This package has `axios` and `pinia` as peer dependencies, so you need to instal
 
 ### 1. Install Pinia
 
-Ensure Pinia is installed and added to your Vue or Nuxt application:
+Ensure Pinia is installed and added to your Vue or Nuxt application.
+
+**For Vue 3 + Vite:**
 
 ```typescript
-// main.ts (for Vue 3 + Vite)
+// main.ts
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
@@ -38,19 +40,93 @@ app.use(createPinia())
 app.mount('#app')
 ```
 
-### 2. Initialize the API Client
+**For Nuxt 3:**
 
-Configure the API client with your API's base URL and any other custom [Axios configuration](https://axios-http.com/docs/req_config). This should be done once when your application starts, ideally before any stores are used.
+Install the official Pinia module for Nuxt:
+
+```bash
+npm install @pinia/nuxt
+# or
+yarn add @pinia/nuxt
+```
+
+Then, add it to your `nuxt.config.ts`:
 
 ```typescript
-// e.g., in main.ts or a dedicated plugin file
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: [
+    '@pinia/nuxt',
+  ],
+})
+```
+
+Pinia will be automatically initialized.
+
+### 2. Initialize the API Client
+
+Configure the API client with your API's base URL and any other custom [Axios configuration](https://axios-http.com/docs/req_config). This should be done once when your application starts.
+
+**For Vue 3 + Vite:**
+
+Do this in your main entry file (e.g., `main.ts`) before mounting the app:
+
+```typescript
+// main.ts
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
 import { initApiClient } from 'pinia-api-client';
 
+// Initialize API Client FIRST
 initApiClient({
   baseURL: 'https://your-api.com/api', // Replace with your actual API base URL
   // headers: { 'X-Custom-Header': 'value' } // Optional: Custom headers
 });
+
+const app = createApp(App)
+app.use(createPinia()) // Then install Pinia
+app.mount('#app')
 ```
+
+**For Nuxt 3:**
+
+Create a Nuxt plugin (e.g., `plugins/api-client.ts`) to initialize the client:
+
+```typescript
+// plugins/api-client.ts
+import { defineNuxtPlugin, useRuntimeConfig } from '#app'
+import { initApiClient } from 'pinia-api-client';
+
+export default defineNuxtPlugin(() => {
+  const config = useRuntimeConfig()
+
+  // Use runtime config for the base URL for flexibility
+  // See: https://nuxt.com/docs/guide/going-further/runtime-config
+  const apiBaseUrl = config.public.apiBase || 'http://localhost:3000/api'; // Example fallback
+
+  initApiClient({
+    baseURL: apiBaseUrl,
+    // headers: { 'X-Custom-Header': 'value' } // Optional: Custom headers
+  });
+});
+```
+
+You might need to define `apiBase` in your `nuxt.config.ts` under `runtimeConfig`:
+
+```typescript
+// nuxt.config.ts
+export default defineNuxtConfig({
+  // ... other config
+  runtimeConfig: {
+    public: {
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || '/api' // Example using environment variable
+    }
+  },
+})
+```
+
+Plugins in Nuxt run automatically, ensuring the API client is configured before your stores or pages need it.
 
 ### 3. Define Your Data Type
 
