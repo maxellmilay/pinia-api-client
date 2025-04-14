@@ -185,7 +185,7 @@ export const useUserStore = createGenericStore<User>(
 
 Use the created store hook in your Vue components or other parts of your application.
 
-```vue
+```typescript
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import { storeToRefs } from 'pinia'; // Useful for refs retaining reactivity
