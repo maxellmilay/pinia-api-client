@@ -25,12 +25,24 @@ interface BaseActions<T> {
   remove(id: string | number): Promise<void>;
 }
 
+// Define action names as a type for type safety
+export type BaseActionName = keyof BaseActions<any>;
+
+// Configuration options for createGenericStore
+export interface GenericStoreOptions {
+  // By default include all actions, or specify which ones to include
+  actions?: BaseActionName[] | 'all';
+}
+
 // Type for the extension function.
 // It can return an object containing optional state, actions, and getters.
 // Use Pinia's types for better inference and correctness if possible, or define manually.
 // Assuming we might need access to the store instance type within getters/actions `this`
 type CombinedState<T, S> = GenericState<T> & S;
-type CombinedActions<T, A> = BaseActions<T> & A;
+type CombinedActions<T, A, IncludedActions extends BaseActionName[] | 'all'> = 
+  (IncludedActions extends 'all' 
+    ? BaseActions<T> 
+    : Pick<BaseActions<T>, Extract<keyof BaseActions<T>, IncludedActions[number]>>) & A;
 
 type StoreExtensions<T, S extends Record<string, any>, G extends Record<string, any>, A extends Record<string, any>> = {
   state?: () => S;
@@ -45,19 +57,142 @@ export function createGenericStore<
   T extends { id: number | string },
   S extends Record<string, any> = {}, // Default to no extra state
   G extends Record<string, any> = {}, // Default to no extra getters
-  A extends Record<string, any> = {}  // Default to no extra actions
+  A extends Record<string, any> = {},  // Default to no extra actions
+  IncludedActions extends BaseActionName[] | 'all' = 'all'  // Default to all base actions
 >(
   storeId: string,
   endpoint: string,
   // extendStore now returns an object with state, getters, actions
-  extendStore?: () => StoreExtensions<T, S, G, A>
+  extendStore?: () => StoreExtensions<T, S, G, A>,
+  // New options parameter
+  options: GenericStoreOptions = { actions: 'all' }
 ): StoreDefinition<
   typeof storeId,
   CombinedState<T, S>,
   G,
-  CombinedActions<T, A>
+  CombinedActions<T, A, IncludedActions>
 > {
   const extensions = extendStore ? extendStore() : {};
+  const includeAction = (actionName: BaseActionName): boolean => {
+    // If actions is 'all' or not specified, include all actions
+    if (!options.actions || options.actions === 'all') return true;
+    // Otherwise, check if the action name is in the list
+    return options.actions.includes(actionName);
+  };
+
+  // Define the action implementations
+  // We type these with CombinedState<T, S> to get access to the state properties
+  // within the implementation
+  type StoreInstance = CombinedState<T, S> & {
+    [K in BaseActionName]?: BaseActions<T>[K]; 
+  };
+  
+  // Define base actions with correct type context
+  const baseActionsImpl = {
+    async fetchAll(this: StoreInstance, params: Record<string, any> = {}) {
+      this.loading = true;
+      this.error = null;
+      try {
+        interface ApiResponse {
+          objects?: T[];
+          current_page?: number;
+          num_pages?: number;
+          total_count?: number;
+        }
+        const { objects = [], current_page = 1, num_pages = 1, total_count } = await apiClient.get<ApiResponse>(endpoint, params);
+        this.items = objects;
+        this.meta = {
+          currentPage: current_page,
+          totalPages: num_pages,
+          totalCount: total_count ?? objects.length
+        };
+      } catch (err: any) {
+        this.error = err instanceof Error ? err : new Error(String(err));
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    async fetchOne(this: StoreInstance, id: string | number) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const data = await apiClient.get<T>(`${endpoint}/${id}`);
+        this.item = data;
+      } catch (err: any) {
+        this.error = err;
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    async create(this: StoreInstance, payload: Partial<T>): Promise<T | undefined> {
+      this.loading = true;
+      this.error = null;
+      let createdData: T | undefined = undefined;
+      try {
+        createdData = await apiClient.post<T>(endpoint, payload);
+        
+        // Only call fetchAll if it's included and available
+        if (includeAction('fetchAll') && typeof this.fetchAll === 'function') {
+          await this.fetchAll();
+        }
+        
+        return createdData;
+      } catch (err: any) {
+        this.error = err;
+        return undefined;
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    async update(this: StoreInstance, id: string | number, payload: Partial<T>): Promise<T | undefined> {
+      this.loading = true;
+      this.error = null;
+      let updatedData: T | undefined = undefined;
+      try {
+        updatedData = await apiClient.put<T>(`${endpoint}/${id}`, payload);
+        
+        // Only call fetchAll if it's included and available
+        if (includeAction('fetchAll') && typeof this.fetchAll === 'function') {
+          await this.fetchAll();
+        }
+        
+        return updatedData;
+      } catch (err: any) {
+        this.error = err;
+        return undefined;
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    async remove(this: StoreInstance, id: string | number) {
+      this.loading = true;
+      this.error = null;
+      try {
+        await apiClient.delete(`${endpoint}/${id}`);
+        
+        // Only call fetchAll if it's included and available
+        if (includeAction('fetchAll') && typeof this.fetchAll === 'function') {
+          await this.fetchAll();
+        }
+      } catch (err: any) {
+        this.error = err;
+      } finally {
+        this.loading = false;
+      }
+    }
+  };
+
+  // Filter available base actions based on options
+  const filteredBaseActions: Partial<Record<BaseActionName, any>> = {};
+  (Object.keys(baseActionsImpl) as BaseActionName[]).forEach(actionName => {
+    if (includeAction(actionName)) {
+      filteredBaseActions[actionName] = baseActionsImpl[actionName as keyof typeof baseActionsImpl];
+    }
+  });
 
   // Define the store options
   const storeOptions = {
@@ -83,88 +218,10 @@ export function createGenericStore<
     // Actions combine base actions and extended actions
     actions: {
       // === Base Actions ===
-      async fetchAll(params: Record<string, any> = {}) {
-        // Pinia automatically binds `this` correctly in actions
-        this.loading = true
-        this.error = null
-        try {
-          // Define expected response structure inline or import if available elsewhere
-          interface ApiResponse {
-            objects?: T[];
-            current_page?: number;
-            num_pages?: number;
-            total_count?: number;
-          }
-          const { objects = [], current_page = 1, num_pages = 1, total_count } = await apiClient.get<ApiResponse>(endpoint, params)
-          this.items = objects
-          this.meta = {
-            currentPage: current_page,
-            totalPages: num_pages,
-            totalCount: total_count ?? objects.length
-          }
-        } catch (err: any) {
-          this.error = err instanceof Error ? err : new Error(String(err))
-        } finally {
-          this.loading = false
-        }
-      },
-      async fetchOne(id: string | number) {
-        this.loading = true
-        this.error = null
-        try {
-          const data = await apiClient.get<T>(`${endpoint}/${id}`)
-          this.item = data
-        } catch (err: any) {
-          this.error = err
-        } finally {
-          this.loading = false
-        }
-      },
-      async create(payload: Partial<T>): Promise<T | undefined> {
-        this.loading = true
-        this.error = null
-        let createdData: T | undefined = undefined;
-        try {
-          createdData = await apiClient.post<T>(endpoint, payload)
-          await this.fetchAll() // Refetch list after creation
-          return createdData
-        } catch (err: any) {
-          this.error = err
-          return undefined; // Explicitly return undefined on error
-        } finally {
-          this.loading = false
-        }
-      },
-      async update(id: string | number, payload: Partial<T>): Promise<T | undefined> {
-        this.loading = true
-        this.error = null
-        let updatedData: T | undefined = undefined;
-        try {
-          updatedData = await apiClient.put<T>(`${endpoint}/${id}`, payload)
-          await this.fetchAll() // Refetch list after update
-          return updatedData
-        } catch (err: any) {
-          this.error = err
-          return undefined; // Explicitly return undefined on error
-        } finally {
-          this.loading = false
-        }
-      },
-      async remove(id: string | number) {
-        this.loading = true
-        this.error = null
-        try {
-          await apiClient.delete(`${endpoint}/${id}`)
-          await this.fetchAll() // Refetch list after deletion
-        } catch (err: any) {
-          this.error = err
-        } finally {
-          this.loading = false
-        }
-      },
+      ...filteredBaseActions,
       // === Extended Actions ===
       ...(extensions.actions || {} as A)
-    } satisfies CombinedActions<T, A> // Add satisfies for type checking actions object
+    }
   };
 
   // Explicitly cast the options to the expected type for defineStore
@@ -177,6 +234,6 @@ export function createGenericStore<
       typeof storeId,
       CombinedState<T, S>,
       G,
-      CombinedActions<T, A>
+      CombinedActions<T, A, IncludedActions>
   >;
 }

@@ -162,6 +162,25 @@ export const useUserStore = createGenericStore<User>('users', '/users');
 // const userStore = useUserStore()
 ```
 
+You can also selectively include only specific base actions:
+
+```typescript
+// stores/userStore.ts
+import { createGenericStore } from 'pinia-api-client';
+import User from '../interfaces/User';
+
+// Only include fetchAll and fetchOne actions
+export const useUserStore = createGenericStore<User>(
+  'users', 
+  '/users',
+  undefined, // No extensions 
+  { actions: ['fetchAll', 'fetchOne'] } // Only include these actions
+);
+
+// This store will only have fetchAll and fetchOne actions
+// Attempting to use store.create, store.update, or store.remove will result in errors
+```
+
 ### 5. Use the Store
 
 Use the created store hook in your Vue components or other parts of your application.
@@ -378,16 +397,19 @@ export const useProductStore = createGenericStore<Product, ProductExtensionState
 *   Methods: `get`, `post`, `put`, `delete`, `postFile`. These methods automatically handle errors using the internal `handleError` function (which logs and re-throws).
 *   Methods accept an optional type argument for the expected response data (e.g., `apiClient.get<User>('/users/1')`).
 
-### `createGenericStore<T, S = {}, G = {}, A = {}>(storeId, endpoint, extendStore?)`
+### `createGenericStore<T, S = {}, G = {}, A = {}, IncludedActions = 'all'>(storeId, endpoint, extendStore?, options?)`
 
 *   Creates a Pinia store definition bound to an API endpoint.
 *   `T`: The TypeScript type of the items being managed (e.g., `User`). Must have an `id` property (`number` or `string`).
 *   `S`: (Optional) Type definition for custom state.
 *   `G`: (Optional) Type definition for custom getters.
 *   `A`: (Optional) Type definition for custom actions.
+*   `IncludedActions`: (Optional) Type specifying which base actions to include ('all' or an array of action names).
 *   `storeId` (String): A **unique** ID for the Pinia store.
 *   `endpoint` (String): The API endpoint path relative to the `baseURL` (e.g., '/users').
 *   `extendStore` (Function, optional): `() => { state?, getters?, actions? }`. A function returning an object with optional `state` (function returning state object), `getters` (object), and `actions` (object).
+*   `options` (Object, optional): Configuration options.
+     * `actions` ('all' | Array<string>, default: 'all'): Specifies which base actions to include. Can be 'all' to include all base actions, or an array of action names to include only specific ones (e.g., ['fetchAll', 'fetchOne']).
 *   Returns: A Pinia store definition (`StoreDefinition`). You typically export the result of calling this function (`export const useMyStore = createGenericStore(...)`).
 
 #### Generic Store State (`GenericState<T> & S`)
@@ -407,15 +429,18 @@ export const useProductStore = createGenericStore<Product, ProductExtensionState
 
 *   `fetchAll(params?)`: Fetches a list of resources. Updates `items` and `meta`.
 *   `fetchOne(id)`: Fetches a single resource by ID. Updates `item`.
-*   `create(payload)`: Creates a new resource. Returns the created item (`T | undefined`). Calls `fetchAll` on success.
-*   `update(id, payload)`: Updates an existing resource. Returns the updated item (`T | undefined`). Calls `fetchAll` on success.
-*   `remove(id)`: Deletes a resource. Calls `fetchAll` on success.
+*   `create(payload)`: Creates a new resource. Returns the created item (`T | undefined`). Calls `fetchAll` on success (if available).
+*   `update(id, payload)`: Updates an existing resource. Returns the updated item (`T | undefined`). Calls `fetchAll` on success (if available).
+*   `remove(id)`: Deletes a resource. Calls `fetchAll` on success (if available).
 *   *...plus any custom actions defined in `A`.* Pinia automatically provides `this` context.
+
+**Note:** The actions actually available in your store depend on the `options.actions` parameter. If you specified specific actions to include, only those will be available.
 
 #### Exported Helper Types
 
 *   `GenericState<T>`: Interface for the base state.
 *   `Meta`: Interface for the pagination metadata.
+*   `BaseActionName`: Type for the names of available base actions ('fetchAll', 'fetchOne', 'create', 'update', 'remove').
 
 ## Testing
 

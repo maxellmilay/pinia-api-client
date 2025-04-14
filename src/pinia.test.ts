@@ -64,6 +64,59 @@ describe('createGenericStore', () => {
     expect(store.meta).toEqual({ currentPage: 1, totalPages: 1, totalCount: 0 });
   });
 
+  it('should create a store with only selected actions', async () => {
+    // Create a store with only fetchAll and fetchOne actions
+    const useTestStore = createGenericStore<TestItem>(
+      'limitedStore', 
+      endpoint, 
+      undefined, 
+      { actions: ['fetchAll', 'fetchOne'] }
+    );
+    const store = useTestStore();
+    
+    // Verify the included actions exist
+    expect(typeof store.fetchAll).toBe('function');
+    expect(typeof store.fetchOne).toBe('function');
+    
+    // Verify excluded actions don't exist
+    expect((store as any).create).toBeUndefined();
+    expect((store as any).update).toBeUndefined();
+    expect((store as any).remove).toBeUndefined();
+    
+    // Test that the included actions work
+    const mockData = [{ id: 1, name: 'Test 1' }];
+    const mockResponse = { objects: mockData, current_page: 1, num_pages: 1, total_count: 1 };
+    mock.onGet(endpoint).reply(200, mockResponse);
+    
+    await store.fetchAll();
+    expect(store.items).toEqual(mockData);
+  });
+
+  it('should handle dependencies between actions correctly when some are excluded', async () => {
+    // Create a store with create but without fetchAll
+    const useTestStore = createGenericStore<TestItem>(
+      'nofetchStore', 
+      endpoint, 
+      undefined, 
+      { actions: ['create'] }
+    );
+    const store = useTestStore();
+    
+    const newItem = { name: 'New Item' };
+    const createdItem = { id: 3, ...newItem };
+    
+    // Mock the POST request
+    mock.onPost(endpoint, newItem).reply(201, createdItem);
+    
+    // The create action should work without trying to call fetchAll
+    const result = await store.create(newItem);
+    
+    expect(result).toEqual(createdItem);
+    expect(store.loading).toBe(false);
+    // The fetchAll should not have been called
+    expect(mock.history.get.length).toBe(0);
+  });
+
   it('fetchAll should fetch items and update state', async () => {
     const useTestStore = createGenericStore<TestItem>(storeId, endpoint);
     const store = useTestStore();
