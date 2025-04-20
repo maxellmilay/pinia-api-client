@@ -1,5 +1,6 @@
 // stores/createGenericStore.ts
-import { defineStore, StoreDefinition } from 'pinia'
+import { defineStore } from 'pinia'
+import type { StoreDefinition } from 'pinia'
 import { apiClient } from './api'
 
 export interface Meta {
@@ -93,13 +94,26 @@ export function createGenericStore<
       this.loading = true;
       this.error = null;
       try {
+        // Process the params to stringify values that might need JSON parsing in the backend
+        const processedParams: Record<string, any> = {};
+        for (const [key, value] of Object.entries(params)) {
+          // If value is a string, boolean, or number (but not an object/array), stringify it
+          if (typeof value === 'string' || typeof value === 'boolean' || 
+              (typeof value === 'number' && !isNaN(value))) {
+            processedParams[key] = JSON.stringify(value);
+          } else {
+            // Keep objects/arrays as is (they'll be handled by axios)
+            processedParams[key] = value;
+          }
+        }
+
         interface ApiResponse {
           objects?: T[];
           current_page?: number;
           num_pages?: number;
           total_count?: number;
         }
-        const { objects = [], current_page = 1, num_pages = 1, total_count } = await apiClient.get<ApiResponse>(endpoint, params);
+        const { objects = [], current_page = 1, num_pages = 1, total_count } = await apiClient.get<ApiResponse>(`${endpoint}/`, processedParams);
         this.items = objects;
         this.meta = {
           currentPage: current_page,
@@ -117,7 +131,7 @@ export function createGenericStore<
       this.loading = true;
       this.error = null;
       try {
-        const data = await apiClient.get<T>(`${endpoint}/${id}`);
+        const data = await apiClient.get<T>(`${endpoint}/${id}/`);
         this.item = data;
       } catch (err: any) {
         this.error = err;
@@ -131,7 +145,7 @@ export function createGenericStore<
       this.error = null;
       let createdData: T | undefined = undefined;
       try {
-        createdData = await apiClient.post<T>(endpoint, payload);
+        createdData = await apiClient.post<T>(`${endpoint}/`, payload);
         
         // Only call fetchAll if it's included and available
         if (includeAction('fetchAll') && typeof this.fetchAll === 'function') {
@@ -152,7 +166,7 @@ export function createGenericStore<
       this.error = null;
       let updatedData: T | undefined = undefined;
       try {
-        updatedData = await apiClient.put<T>(`${endpoint}/${id}`, payload);
+        updatedData = await apiClient.put<T>(`${endpoint}/${id}/`, payload);
         
         // Only call fetchAll if it's included and available
         if (includeAction('fetchAll') && typeof this.fetchAll === 'function') {
@@ -172,7 +186,7 @@ export function createGenericStore<
       this.loading = true;
       this.error = null;
       try {
-        await apiClient.delete(`${endpoint}/${id}`);
+        await apiClient.delete(`${endpoint}/${id}/`);
         
         // Only call fetchAll if it's included and available
         if (includeAction('fetchAll') && typeof this.fetchAll === 'function') {
@@ -228,8 +242,7 @@ export function createGenericStore<
   // This helps ensure the structure matches Pinia's expectations
   return defineStore(
       storeId,
-      storeOptions as any // Using `as any` temporarily, Pinia should infer correctly
-      // Alternatively, refine storeOptions type to match StoreDefinition requirements more closely
+      storeOptions
   ) as StoreDefinition<
       typeof storeId,
       CombinedState<T, S>,

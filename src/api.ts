@@ -1,5 +1,6 @@
 // utils/apiClient.js
-import axios, { AxiosInstance, AxiosRequestConfig, Method, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios from 'axios';
+import type { AxiosInstance, AxiosRequestConfig, Method, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
 // Export for testing purposes - make it potentially undefined
 // Export the instance itself for mocking
@@ -7,7 +8,7 @@ export let axiosInstance: AxiosInstance | undefined;
 
 // Define the configuration type for initApiClient
 // Extends AxiosRequestConfig but makes baseURL mandatory
-interface ApiClientConfig extends Omit<AxiosRequestConfig, 'baseURL'> {
+export interface ApiClientConfig extends Omit<AxiosRequestConfig, 'baseURL'> {
   baseURL: string;
   // Optional interceptors (can be single function or array)
   requestInterceptors?: ((config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>) | Array<(config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>>;

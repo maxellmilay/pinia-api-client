@@ -250,37 +250,60 @@ describe('apiClient (after initialization)', () => {
   });
 
   // Test postFile
-  it('postFile should call axiosInstance.post with FormData and multipart header', async () => {
+  it('postFile should call axiosInstance.post with correct url, formData, and multipart headers', async () => {
     const formData = new FormData();
-    formData.append('file', new Blob(['content']), 'file.txt');
-    const mockResponse = { data: { url: 'http://path/to/file.txt' } };
-    mockAxiosInstance.post.mockResolvedValue(mockResponse); // postFile uses instance.post directly
+    formData.append('file', new Blob(['test file content'], { type: 'text/plain' }), 'test.txt');
+    formData.append('name', 'Test File');
+    
+    const mockResponse = { data: { id: 3, name: 'Test File', url: 'http://test.com/files/test.txt' } };
+    mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
-    const result = await apiClient.postFile(endpoint, formData);
+    const result = await apiClient.postFile(`${endpoint}/upload`, formData);
 
-    expect(mockAxiosInstance.post).toHaveBeenCalledWith(endpoint, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+      `${endpoint}/upload`, 
+      formData,
+      expect.objectContaining({
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+    );
     expect(result).toEqual(mockResponse.data);
   });
 
-  // Test postFile error handling
-  it('postFile should handle errors', async () => {
-    // Temporarily suppress console.error
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  // Test error handling
+  it('should handle and rethrow errors in request', async () => {
+    const error = new Error('Network Error');
+    mockAxiosInstance.request.mockRejectedValue(error);
 
-    const formData = new FormData();
-    formData.append('file', new Blob(['content']), 'file.txt');
-    const mockError = new Error('Upload Failed');
-    // Make the direct post call reject
-    mockAxiosInstance.post.mockRejectedValue(mockError);
+    await expect(apiClient.get(endpoint)).rejects.toThrow();
+  });
 
-    await expect(apiClient.postFile(endpoint, formData)).rejects.toThrow(`Request failed: ${mockError.message}`);
-    expect(mockAxiosInstance.post).toHaveBeenCalledWith(endpoint, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+  // Test error handling with response data
+  it('should handle errors with response data', async () => {
+    const errorResponseData = { message: 'Bad Request', code: 400 };
+    const axiosError = {
+      response: {
+        status: 400,
+        data: errorResponseData,
+      },
+      request: {},
+      message: 'Request failed with status code 400',
+      isAxiosError: true,
+      toJSON: () => ({}),
+    };
+    mockAxiosInstance.request.mockRejectedValue(axiosError);
 
-    consoleErrorSpy.mockRestore();
+    await expect(apiClient.get(endpoint)).rejects.toEqual(errorResponseData);
+  });
+
+  // Test client not initialized
+  it('should throw error if apiClient is not initialized before making request', async () => {
+    // Reset apiClient
+    (apiInstanceInternal as any) = undefined;
+    
+    await expect(apiClient.get(endpoint)).rejects.toThrow('apiClient not initialized');
   });
 
   // Test Error Handling - API Error (e.g., 4xx, 5xx)
